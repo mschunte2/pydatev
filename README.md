@@ -1,6 +1,7 @@
 # pyDATEV
 
-A python module to import and export DATEV files.
+A python module to load, edit, and save DATEV files and manage the
+attached documentation files (Belege).
 
 
 ## Potential alternatives 
@@ -12,7 +13,8 @@ A python module to import and export DATEV files.
 
 | Datenkategorie                        | Status                   |
 |---------------------------------------|--------------------------|
-| Buchungsstapel                        | version 9-13 implemented, except Beleg-import/export  |
+| Buchungsstapel                        | version 9-13 implemented |
+| Belegarchiv (Document Package)        | Document_v040 + v060 implemented (import + export) |
 | Wiederkehrende Buchungen              | not implemented          |
 | Buchungstextkonstanten                | not implemented          |
 | Sachkontenbeschriftungen              | not implemented          |
@@ -92,3 +94,51 @@ buchungsstapel.add_buchung(
 # Save to DATEV file
 buchungsstapel.save('EXTF_blablub.csv')
 ```
+
+### Handling documentation files (Belege)
+
+A booking can carry an attached documentation file (Beleg) — a PDF
+invoice, a scanned receipt, etc. pydatev exposes Belege as a
+field-like attribute on each entry; `bs.save()` then writes a
+`belege.zip` next to the CSV automatically.
+
+```python
+import pydatev, datetime
+
+# A Beleg wraps one file plus the metadata document.xml needs.
+invoice = pydatev.Beleg(
+    './invoice-001.pdf',
+    belegtyp=pydatev.BELEGTYP_RECHNUNGSEINGANG,
+    archive_name='invoice-001.pdf',     # optional; defaults to basename
+)
+
+bs = pydatev.Buchungsstapel(berater=1001, mandant=1,
+    wirtschaftsjahr_beginn=datetime.date(2025,1,1),
+    sachkontennummernlänge=4,
+    datum_von=datetime.date(2025,1,1),
+    datum_bis=datetime.date(2025,12,31),
+    waehrungskennzeichen='EUR')
+entry = bs.add_buchung(umsatz=34.56, soll_haben='S',
+    konto='3333', gegenkonto='1111',
+    belegdatum=datetime.date(2025,2,1))
+entry['Beleg'] = invoice            # accepts Beleg or a file path
+bs.save('EXTF_buchungsstapel.csv')  # → CSV + belege.zip alongside
+
+# Load back. belege.zip next to the CSV is picked up automatically.
+bs2 = pydatev.Buchungsstapel(filename='EXTF_buchungsstapel.csv')
+for e in bs2.data:
+    beleg = e['Beleg']              # Beleg object or None
+```
+
+`Beleg(...)` validates the file extension against
+`pydatev.SUPPORTED_BELEG_EXTENSIONS` (PDF, JPG/JPEG, PNG, TIFF, BMP,
+GIF, DOC/DOCX, XLS/XLSX, ODT/ODS, TXT, RTF, CSV, MSG, XML).
+`Belegarchiv.load()` does **not** validate — existing archives are
+trusted, so a round-trip `load(zip) → save(zip)` preserves blobs and
+filenames bit-identically. Standalone Belege without a corresponding
+Buchung are also supported (`bs.belege.add(beleg)` or `archive.add(...)`
+on a stand-alone `Belegarchiv`).
+
+For a complete walkthrough — architecture, API reference, examples,
+edge cases, and the list of supported file types — see
+[File-handling.md](./File-handling.md).
