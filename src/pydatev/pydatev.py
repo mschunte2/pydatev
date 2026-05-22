@@ -378,7 +378,9 @@ class Beleg:
         filepath:     str or os.PathLike, the file to read
         belegtyp:     BELEGTYP_RECHNUNGSEINGANG | BELEGTYP_RECHNUNGSAUSGANG | None
         guid:         optional 36-char UUID; auto-derived from the
-                      absolute path (uuid5) if omitted
+                      archive_name (uuid5) if omitted, so the GUID is
+                      stable across re-exports — independent of where
+                      on disk the file lives at construction time.
         archive_name: optional name to store under in the archive;
                       defaults to os.path.basename(filepath)
         '''
@@ -396,8 +398,13 @@ class Beleg:
                 "Extension .{} of {!r} is not in the DATEV allowlist {}"
                 .format(ext, name, sorted(SUPPORTED_BELEG_EXTENSIONS)))
         if guid is None:
-            guid = str(uuid.uuid5(
-                _BELEG_GUID_NAMESPACE, os.path.abspath(filepath)))
+            # Use the archive name (what ends up in document.xml) as the
+            # GUID basis. Anchoring on the file's identity-in-archive,
+            # not its random-per-run disk location, makes the GUID
+            # stable across re-exports — which is what downstream
+            # systems (e.g. BuchhaltungsButler) need to match an
+            # already-uploaded Beleg against subsequent CSV-Beleglinks.
+            guid = str(uuid.uuid5(_BELEG_GUID_NAMESPACE, name))
         if not _BELEG_GUID_RE.fullmatch(guid):
             raise DatevFormatError(
                 "guid {!r} must be a 36-char UUID".format(guid))

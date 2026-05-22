@@ -6,6 +6,21 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-05-22
+
+### Fixed
+
+- **`Beleg` default-GUID was unstable across runs.** It used to derive
+  from `uuid5(NS, os.path.abspath(filepath))`, so every time the same
+  logical Beleg was written from a different working directory or
+  TempDir, it got a fresh GUID. That defeats downstream auto-attach
+  flows (e.g. BuchhaltungsButler's CSV-Beleglink matching against
+  an already-uploaded Beleg-Archiv). Now derived from
+  `uuid5(NS, archive_name)` — the same name that ends up in
+  `document.xml` — so the GUID is location-independent and
+  re-export-stable. Code that passes an explicit `guid=...` is
+  unaffected.
+
 ## [0.2.0] — 2026-05-22
 
 ### Added

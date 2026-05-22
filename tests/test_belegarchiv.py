@@ -59,6 +59,34 @@ def test_field_like_attach_read_roundtrip_v040(tmp_path):
     assert beleg.belegtyp == pydatev.BELEGTYP_RECHNUNGSEINGANG
 
 
+def test_default_guid_is_stable_across_paths(tmp_path):
+    """The default GUID must be derived from the *archive name* (what
+    ends up in document.xml), not from the filesystem absolute path —
+    so two files with the same archive_name but different on-disk
+    locations get the same GUID. This is what downstream systems
+    matching against an already-uploaded Beleg-Archiv depend on; the
+    previous abspath-based derivation broke that contract because the
+    path changes per run (TempDir etc.)."""
+    # Same archive_name, two different directories on disk.
+    dir_a = tmp_path / "run_one"
+    dir_b = tmp_path / "run_two"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    pdf_a = _make_pdf(str(dir_a), name="VV-23.pdf", content=b"%PDF-A")
+    pdf_b = _make_pdf(str(dir_b), name="VV-23.pdf", content=b"%PDF-A")
+    b_a = pydatev.Beleg(filepath=pdf_a)
+    b_b = pydatev.Beleg(filepath=pdf_b)
+    assert b_a.guid == b_b.guid, (
+        f"Default GUID must be stable across paths for the same "
+        f"archive_name; got {b_a.guid!r} vs {b_b.guid!r}"
+    )
+    # And an explicit archive_name override should produce the same
+    # GUID as the implicit one when the name matches.
+    pdf_c = _make_pdf(str(dir_a), name="other-on-disk.pdf", content=b"x")
+    b_c = pydatev.Beleg(filepath=pdf_c, archive_name="VV-23.pdf")
+    assert b_c.guid == b_a.guid
+
+
 def test_dedup_same_guid(tmp_path):
     """Two entries set the same file → archive contains it once;
     both entries' Beleglink GUIDs match the same Beleg."""
