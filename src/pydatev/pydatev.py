@@ -63,8 +63,10 @@ class DatevEntry(UserDict):
             elif format_type == 'Text':
                 if not isinstance(value, str):
                     raise DatevFormatError("The value for key '{}' needs to be of type str.".format(key))
-                if '"' in value:
-                    raise DatevFormatError("The value for key '{}' should not contain quotation marks.".format(key))
+                # Quotation marks are legal inside DATEV Text fields
+                # (e.g. column "Beleglink" expects `BEDI "<UUID>"`).
+                # They are CSV-escaped by python2datev() via the
+                # standard doubled-quote convention.
             elif format_type == 'Zahl' and decimal_places == 0:
                 if not isinstance(value, int):
                     raise DatevFormatError("The value for key '{}' needs to be of type int.".format(key))
@@ -131,7 +133,7 @@ class DatevEntry(UserDict):
                 s = value
                 
             elif format_type == 'Text':
-                 s = '"' + value + '"'
+                 s = '"' + value.replace('"', '""') + '"'
                 
             elif format_type == 'Zahl':
                 s =  '{:.{}f}'.format(value, decimal_places).replace('.',',')
