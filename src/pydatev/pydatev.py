@@ -5,6 +5,7 @@
 # License: GNU GPLv3
 #
 
+import hashlib
 import os
 import re
 import uuid
@@ -382,10 +383,16 @@ class Beleg:
         ----------
         filepath:     str or os.PathLike, the file to read
         belegtyp:     BELEGTYP_RECHNUNGSEINGANG | BELEGTYP_RECHNUNGSAUSGANG | None
-        guid:         optional 36-char UUID; auto-derived from the
-                      archive_name (uuid5) if omitted, so the GUID is
-                      stable across re-exports — independent of where
-                      on disk the file lives at construction time.
+        guid:         optional 36-char UUID; auto-derived from
+                      (archive_name, sha256(blob)) via uuid5 if
+                      omitted. Same file content under the same
+                      archive name always yields the same GUID,
+                      regardless of disk path. Same name with
+                      different content → different GUIDs (no silent
+                      filename collisions). Different name with same
+                      content → different GUIDs (preserves
+                      business-identity-via-filename, e.g. two empty
+                      placeholder Belege filed under distinct names).
         archive_name: optional name to store under in the archive;
                       defaults to os.path.basename(filepath)
         '''
@@ -402,24 +409,27 @@ class Beleg:
             raise DatevFormatError(
                 "Extension .{} of {!r} is not in the DATEV allowlist {}"
                 .format(ext, name, sorted(SUPPORTED_BELEG_EXTENSIONS)))
-        if guid is None:
-            # Use the archive name (what ends up in document.xml) as the
-            # GUID basis. Anchoring on the file's identity-in-archive,
-            # not its random-per-run disk location, makes the GUID
-            # stable across re-exports — which is what downstream
-            # systems (e.g. BuchhaltungsButler) need to match an
-            # already-uploaded Beleg against subsequent CSV-Beleglinks.
-            guid = str(uuid.uuid5(_BELEG_GUID_NAMESPACE, name))
-        if not _BELEG_GUID_RE.fullmatch(guid):
-            raise DatevFormatError(
-                "guid {!r} must be a 36-char UUID".format(guid))
         if belegtyp not in (None, BELEGTYP_RECHNUNGSEINGANG,
                             BELEGTYP_RECHNUNGSAUSGANG):
             raise DatevFormatError(
                 "belegtyp must be '1', '2', or None; got {!r}"
                 .format(belegtyp))
         with open(filepath, "rb") as f:
-            self.blob = f.read()
+            blob = f.read()
+        if guid is None:
+            # Derive from (archive_name, sha256(blob)) so re-exporting
+            # the same byte-stable file under the same name yields the
+            # same GUID (needed by downstream auto-attach flows, e.g.
+            # BuchhaltungsButler), while filename collisions over
+            # different content no longer silently dedup. The NUL
+            # separator removes any (name, hash) parse ambiguity.
+            digest = hashlib.sha256(blob).hexdigest()
+            guid = str(uuid.uuid5(_BELEG_GUID_NAMESPACE,
+                                  name + "\0" + digest))
+        if not _BELEG_GUID_RE.fullmatch(guid):
+            raise DatevFormatError(
+                "guid {!r} must be a 36-char UUID".format(guid))
+        self.blob = blob
         self.guid = guid
         self.filename = name
         self.belegtyp = belegtyp

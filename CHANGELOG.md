@@ -6,6 +6,39 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-26
+
+### Changed
+
+- **`Beleg` default GUID derivation switched from
+  `uuid5(NS, archive_name)` to `uuid5(NS, archive_name + "\0" +
+  sha256(blob).hexdigest())`** — a hybrid of filename and content.
+  This fixes two failure modes of the previous derivation:
+  - *False collisions*: two genuinely different files filed under the
+    same `archive_name` now get distinct GUIDs, so
+    `Belegarchiv.add()` no longer silently drops the second one as a
+    "duplicate".
+  - *False splits avoided*: byte-identical files filed under
+    different `archive_name`s still get distinct GUIDs, preserving
+    business-identity-via-filename (e.g. two empty placeholder
+    Belege filed under separate names stay as two Belege).
+  Round-trip stability across re-exports (the v0.2.1 contract) is
+  preserved as long as both the archive name and the file bytes are
+  stable — which is the typical case for broker-export PDFs stored
+  in a content-addressable backing store.
+
+  **Breaking change**: re-exporting a Beleg whose source bytes have
+  changed between exports will now produce a different default GUID.
+  Code that overrides via `guid=...` is unaffected. Existing
+  archives load unchanged (their GUIDs are read from `document.xml`,
+  not recomputed).
+
+  New regression tests at `tests/test_belegarchiv.py`:
+  `test_default_guid_distinguishes_different_content_same_name` and
+  `test_default_guid_distinguishes_same_content_different_name`.
+
+## [0.2.2] — 2026-05-26
+
 ### Fixed
 
 - **Round-trip of Text values with embedded quotes.** `python2datev`

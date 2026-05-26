@@ -60,14 +60,10 @@ def test_field_like_attach_read_roundtrip_v040(tmp_path):
 
 
 def test_default_guid_is_stable_across_paths(tmp_path):
-    """The default GUID must be derived from the *archive name* (what
-    ends up in document.xml), not from the filesystem absolute path —
-    so two files with the same archive_name but different on-disk
-    locations get the same GUID. This is what downstream systems
-    matching against an already-uploaded Beleg-Archiv depend on; the
-    previous abspath-based derivation broke that contract because the
-    path changes per run (TempDir etc.)."""
-    # Same archive_name, two different directories on disk.
+    """Same archive_name + same content → same GUID, regardless of
+    where the file sits on disk. Downstream auto-attach flows (e.g.
+    BuchhaltungsButler matching against an already-uploaded
+    Beleg-Archiv) depend on this round-trip stability."""
     dir_a = tmp_path / "run_one"
     dir_b = tmp_path / "run_two"
     dir_a.mkdir()
@@ -78,13 +74,49 @@ def test_default_guid_is_stable_across_paths(tmp_path):
     b_b = pydatev.Beleg(filepath=pdf_b)
     assert b_a.guid == b_b.guid, (
         f"Default GUID must be stable across paths for the same "
-        f"archive_name; got {b_a.guid!r} vs {b_b.guid!r}"
+        f"(archive_name, content); got {b_a.guid!r} vs {b_b.guid!r}"
     )
-    # And an explicit archive_name override should produce the same
-    # GUID as the implicit one when the name matches.
-    pdf_c = _make_pdf(str(dir_a), name="other-on-disk.pdf", content=b"x")
+    # Explicit archive_name override matches the implicit one when
+    # name AND content are equal.
+    pdf_c = _make_pdf(str(dir_a), name="other-on-disk.pdf", content=b"%PDF-A")
     b_c = pydatev.Beleg(filepath=pdf_c, archive_name="VV-23.pdf")
     assert b_c.guid == b_a.guid
+
+
+def test_default_guid_distinguishes_different_content_same_name(tmp_path):
+    """Hybrid GUID derivation: two files filed under the same archive
+    name but with different content must get DIFFERENT GUIDs. Under
+    the old archive-name-only derivation this was a silent collision
+    — Belegarchiv.add() would drop the second one as a "duplicate"
+    even though the bytes differed."""
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+    pdf_a = _make_pdf(str(dir_a), name="Rechnung.pdf", content=b"%PDF-CONTENT-1")
+    pdf_b = _make_pdf(str(dir_b), name="Rechnung.pdf", content=b"%PDF-CONTENT-2")
+    b_a = pydatev.Beleg(filepath=pdf_a)
+    b_b = pydatev.Beleg(filepath=pdf_b)
+    assert b_a.guid != b_b.guid, (
+        "Same archive_name but different content must produce "
+        "different GUIDs (no silent filename collision)"
+    )
+
+
+def test_default_guid_distinguishes_same_content_different_name(tmp_path):
+    """Hybrid GUID derivation: two byte-identical files filed under
+    different archive names get DIFFERENT GUIDs. This preserves
+    business-identity-via-filename — e.g. two empty placeholder
+    Belege filed under distinct names stay as two separate Belege,
+    not collapsed into one."""
+    pdf_a = _make_pdf(str(tmp_path), name="Beleg-Q1.pdf", content=b"")
+    pdf_b = _make_pdf(str(tmp_path), name="Beleg-Q2.pdf", content=b"")
+    b_a = pydatev.Beleg(filepath=pdf_a)
+    b_b = pydatev.Beleg(filepath=pdf_b)
+    assert b_a.guid != b_b.guid, (
+        "Same content but different archive_name must produce "
+        "different GUIDs (business identity lives in the filename)"
+    )
 
 
 def test_dedup_same_guid(tmp_path):
