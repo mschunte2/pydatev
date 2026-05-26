@@ -6,6 +6,49 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-26
+
+### Changed
+
+- **Beleg/Belegarchiv code moved out of `pydatev.py` into a new
+  opt-in submodule `pydatev.belegarchiv`.** Users who only need
+  plain Buchungsstapel CSV handling see the upstream-equivalent
+  surface via `import pydatev` (no Beleg names exposed, no
+  `Buchungsstapel.belege` attribute, no auto-write of
+  `belege.zip`). Users who want Belege opt in via:
+
+  ```python
+  from pydatev.belegarchiv import Buchungsstapel, Beleg, Belegarchiv
+  ```
+
+  The `Buchungsstapel` exposed by `pydatev.belegarchiv` is a
+  subclass of the core `pydatev.Buchungsstapel` (drop-in
+  replacement) that adds:
+  - `self.belege` (a `Belegarchiv` instance)
+  - the field-like `entry["Beleg"] = path` row-attachment API
+  - automatic `belege.zip` write next to the CSV on `save()`
+  - automatic `belege.zip` read from the same directory on
+    `load()`
+
+  **Breaking change for downstream import paths**: callers must
+  switch `pydatev.Beleg` → `pydatev.belegarchiv.Beleg`,
+  `pydatev.BELEGTYP_*` → `pydatev.belegarchiv.BELEGTYP_*`, etc.
+  Functional behavior of the moved classes is unchanged. Existing
+  on-disk archives load identically.
+
+- **`src/pydatev/pydatev.py` is now ~417 lines** (down from 826),
+  matching the upstream `Fjanks/pydatev` baseline at commit
+  `8ca2369` modulo a single 3-line hunk: the `datev2python` Text
+  branch's CSV-escape fix (un-doubles internal quotes, strips outer
+  wrappers — inverse of the existing `python2datev` escape). The
+  diff vs upstream is now visually trivial to review.
+
+- **New regression tests in `tests/test_module_isolation.py`** pin
+  the surface boundary: `import pydatev` is asserted to expose no
+  Beleg-related names, the core `Buchungsstapel` has no `belege`
+  attribute, and `pydatev.belegarchiv.Buchungsstapel` is a true
+  subclass of the core class.
+
 ## [0.3.1] — 2026-05-26
 
 ### Changed

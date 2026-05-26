@@ -46,6 +46,30 @@ pyDATEV implements both sides through three small components:
 
 ---
 
+## Import
+
+Belege classes live in an opt-in submodule so that plain
+`import pydatev` keeps the original upstream surface unchanged.
+Anything Beleg-related is reached via `pydatev.belegarchiv`:
+
+```python
+from pydatev.belegarchiv import Buchungsstapel, Beleg, Belegarchiv
+from pydatev.belegarchiv import BELEGTYP_RECHNUNGSEINGANG
+```
+
+For terse code in this document we'll alias the whole submodule:
+
+```python
+from pydatev import belegarchiv as pydatev_be
+```
+
+The `pydatev_be.Buchungsstapel` exposed by the submodule is a
+subclass of the core `pydatev.Buchungsstapel` — drop-in compatible,
+plus the Belege hooks (`self.belege`, the `entry["Beleg"]` field-like
+API, and `belege.zip` save/load orchestration).
+
+---
+
 ## Requirements
 
 - **Python**: 3.6 or later (matches pyDATEV's base requirement). No
@@ -57,8 +81,10 @@ pyDATEV implements both sides through three small components:
   it to a temporary file first and pass the path.
 - **Schema-conformant GUIDs**: every Beleg needs a 36-character UUID
   matching the DATEV Belegtransfer schema constraint. pyDATEV derives
-  one automatically (uuid5 from the absolute path) if you don't
-  supply one explicitly.
+  one automatically (UUIDv8 from SHA-256 of namespace + archive name +
+  blob — see `_beleg_uuid8`) if you don't supply one explicitly. The
+  result is stable across re-exports of the same (name, content) and
+  distinguishes both filename collisions and content changes.
 - **Allowed file types**: only the DATEV-accepted extensions are
   permitted on construction — see *Supported file types* below.
   Imports of existing archives are **not** validated (round-trip
@@ -69,22 +95,22 @@ pyDATEV implements both sides through three small components:
 ## The `Beleg` class
 
 ```python
-pydatev.Beleg(
+pydatev_be.Beleg(
     filepath,                  # str or os.PathLike — file on disk
     belegtyp=None,             # see Belegtyp constants below
-    guid=None,                 # auto if omitted (uuid5 from abspath)
+    guid=None,                 # auto if omitted (UUIDv8 / SHA-256)
     archive_name=None,         # defaults to os.path.basename(filepath)
 )
 ```
 
 The constructor reads `filepath` into memory and sets:
 
-- `.guid` — 36-char UUID. Deterministic from the absolute path when
-  not supplied.
+- `.guid` — 36-char UUIDv8 (RFC 9562), derived from SHA-256 of
+  `(namespace || archive_name || 0x00 || blob)` when not supplied.
 - `.filename` — the name used inside the ZIP archive.
 - `.blob` — the file contents as `bytes`.
-- `.belegtyp` — `pydatev.BELEGTYP_RECHNUNGSEINGANG` (`"1"`),
-  `pydatev.BELEGTYP_RECHNUNGSAUSGANG` (`"2"`), or `None`.
+- `.belegtyp` — `pydatev_be.BELEGTYP_RECHNUNGSEINGANG` (`"1"`),
+  `pydatev_be.BELEGTYP_RECHNUNGSAUSGANG` (`"2"`), or `None`.
 
 Convenience method:
 
@@ -92,7 +118,8 @@ Convenience method:
 beleg.write_to(target_dir)     # writes the blob back to disk; returns path
 ```
 
-Construction raises `pydatev.DatevFormatError` for an unsupported
+Construction raises `pydatev.DatevFormatError` (the core class — also
+re-exported as `pydatev_be.DatevFormatError`) for an unsupported
 extension, a malformed GUID, or an invalid belegtyp.
 
 ---
@@ -100,7 +127,7 @@ extension, a malformed GUID, or an invalid belegtyp.
 ## The `Belegarchiv` class
 
 ```python
-pydatev.Belegarchiv(
+pydatev_be.Belegarchiv(
     filename=None,             # if given, load from this ZIP
     description="",
     generating_system="pydatev",
@@ -154,13 +181,13 @@ as-is. A subsequent `save(zip)` produces a bit-equivalent archive
 
 ## Buchungsstapel integration
 
-A `Buchungsstapel` instance owns one `Belegarchiv`, accessible at
-`bs.belege`. Each booking row (a `Buchungsentry`, subclass of
-`DatevEntry`) supports two extra pseudo-fields:
+A `pydatev_be.Buchungsstapel` instance owns one `Belegarchiv`,
+accessible at `bs.belege`. Each booking row (a `Buchungsentry`,
+subclass of `DatevEntry`) supports two extra pseudo-fields:
 
 ```python
 entry['Beleg']    = './invoice-001.pdf'   # path OR a Beleg object
-entry['Belegtyp'] = pydatev.BELEGTYP_RECHNUNGSEINGANG
+entry['Belegtyp'] = pydatev_be.BELEGTYP_RECHNUNGSEINGANG
 ```
 
 Behaviour:
@@ -175,7 +202,7 @@ Behaviour:
   none attached). The lookup goes through `Beleglink` → `bs.belege`.
 - `bs.save(csv_path)` writes the CSV; if `bs.belege.data` is
   non-empty, it also writes `belege.zip` in the same directory.
-- `Buchungsstapel(filename=csv_path)` loads the CSV; if a
+- `pydatev_be.Buchungsstapel(filename=csv_path)` loads the CSV; if a
   `belege.zip` lives next to it, the archive is loaded into
   `bs.belege` and entries' `entry['Beleg']` lookups work.
 
@@ -186,9 +213,10 @@ Behaviour:
 ### Add a single invoice to a booking
 
 ```python
-import pydatev, datetime
+import datetime
+from pydatev import belegarchiv as pydatev_be
 
-bs = pydatev.Buchungsstapel(berater=1001, mandant=1,
+bs = pydatev_be.Buchungsstapel(berater=1001, mandant=1,
     wirtschaftsjahr_beginn=datetime.date(2025,1,1),
     sachkontennummernlänge=4,
     datum_von=datetime.date(2025,1,1),
@@ -199,7 +227,7 @@ entry = bs.add_buchung(umsatz=34.56, soll_haben='S',
     konto='3333', gegenkonto='1111',
     belegdatum=datetime.date(2025,2,1))
 entry['Beleg']    = './invoice-001.pdf'
-entry['Belegtyp'] = pydatev.BELEGTYP_RECHNUNGSEINGANG
+entry['Belegtyp'] = pydatev_be.BELEGTYP_RECHNUNGSEINGANG
 
 bs.save('./out/EXTF_buchungsstapel_2025.csv')
 # Produces: ./out/EXTF_buchungsstapel_2025.csv + ./out/belege.zip
@@ -208,22 +236,23 @@ bs.save('./out/EXTF_buchungsstapel_2025.csv')
 ### Bulk-import a folder of PDFs into a stand-alone Belegarchiv
 
 ```python
-import os, pydatev
+import os
+from pydatev import belegarchiv as pydatev_be
 
-archive = pydatev.Belegarchiv(description="Belege 2025",
-                              generating_system="my-tool")
+archive = pydatev_be.Belegarchiv(description="Belege 2025",
+                                 generating_system="my-tool")
 for name in sorted(os.listdir('./pdfs/')):
     if name.lower().endswith('.pdf'):
-        archive.add(pydatev.Beleg(os.path.join('./pdfs/', name)))
+        archive.add(pydatev_be.Beleg(os.path.join('./pdfs/', name)))
 archive.save('./belege.zip')
 ```
 
 ### Round-trip a Buchungsstapel through pyDATEV and back
 
 ```python
-import pydatev
+from pydatev import belegarchiv as pydatev_be
 
-bs = pydatev.Buchungsstapel(filename='./EXTF_buchungsstapel_2025.csv')
+bs = pydatev_be.Buchungsstapel(filename='./EXTF_buchungsstapel_2025.csv')
 # bs.belege.data populated from ./belege.zip if it exists
 
 # … inspect or modify …
@@ -240,9 +269,10 @@ bs.save('./EXTF_buchungsstapel_2025.csv')
 ### Extract every Beleg from a loaded archive back to disk
 
 ```python
-import os, pydatev
+import os
+from pydatev import belegarchiv as pydatev_be
 
-archive = pydatev.Belegarchiv(filename='./belege.zip')
+archive = pydatev_be.Belegarchiv(filename='./belege.zip')
 os.makedirs('./extracted/', exist_ok=True)
 for beleg in archive.data:
     beleg.write_to('./extracted/')
@@ -253,7 +283,7 @@ for beleg in archive.data:
 ## Supported file types
 
 The DATEV Belegtransfer specification permits the following file
-types (`pydatev.SUPPORTED_BELEG_EXTENSIONS`). `Beleg(...)` rejects
+types (`pydatev_be.SUPPORTED_BELEG_EXTENSIONS`). `Beleg(...)` rejects
 any other extension at construction time; `Belegarchiv.load()` does
 not enforce the allowlist (round-trip stability).
 
@@ -282,8 +312,8 @@ round-trip exports, so it has been validated against real consumers.
 for modern DATEV-Online integrations.
 
 ```python
-archive = pydatev.Belegarchiv(schema_version="v06.0",
-                              description="Belege 2025")
+archive = pydatev_be.Belegarchiv(schema_version="v06.0",
+                                 description="Belege 2025")
 ```
 
 On load, pyDATEV detects the namespace and selects the matching
@@ -293,40 +323,48 @@ schema automatically.
 
 ## Backward compatibility
 
-The Beleg extension is a strictly additive layer:
+The Beleg extension lives in an opt-in submodule, so the surface
+seen by plain `import pydatev` is **unchanged** vs upstream
+Fjanks/pydatev (modulo the v0.2.2 Text round-trip bugfix). Pre-Beleg
+code that does `import pydatev; bs = pydatev.Buchungsstapel(...)`
+works identically — no `belege.zip` written, no `.belege` attribute,
+no Buchungsentry subclass exposed.
 
-- A `Buchungsstapel` that no code ever touches via the `Beleg`-API
-  produces exactly the same CSV bytes as before. No `belege.zip`
-  is written alongside, and `Buchungsstapel(filename=...)` with no
-  neighbouring `belege.zip` behaves identically to pre-Beleg
-  pyDATEV.
-- `bs.add_buchung(...)` returns a `Buchungsentry` (subclass of
-  `DatevEntry`). `isinstance(entry, DatevEntry)` continues to hold;
-  only a brittle `type(entry) is DatevEntry` check would break.
+Users who want Belege opt in via
+`from pydatev.belegarchiv import Buchungsstapel, Beleg, ...`:
 
-If you maintain pre-Beleg code that uses `Buchungsstapel`, you do
-not need to change anything.
+- `pydatev_be.Buchungsstapel` is a subclass of
+  `pydatev.Buchungsstapel`, so existing isinstance checks against
+  the core class continue to work for both.
+- `bs.add_buchung(...)` (on the submodule's Buchungsstapel) returns
+  a `Buchungsentry` (subclass of `DatevEntry`).
+  `isinstance(entry, DatevEntry)` continues to hold; only a brittle
+  `type(entry) is DatevEntry` check would break.
 
 ---
 
 ## Edge cases
 
 - **Same file on multiple bookings**: `entry['Beleg'] = path` on a
-  second booking with the same file reuses the existing Beleg —
-  dedup is by GUID, derived from the absolute path. One Beleg in
-  the ZIP; both bookings share the same `Beleglink` GUID.
+  second booking with byte-identical content under the same archive
+  name reuses the existing Beleg — dedup is by GUID, derived as
+  UUIDv8 over `(archive_name, sha256(blob))`. One Beleg in the ZIP;
+  both bookings share the same `Beleglink` GUID. Different content
+  under the same name, or the same content under different names,
+  yield distinct GUIDs (no silent collisions).
 - **Orphan Belege on load**: if a `belege.zip` contains documents
   that no booking row references, they remain in `bs.belege.data`
   after load. Round-trip preserves them on the next save.
 - **Stand-alone Belege without a booking**: just call
-  `bs.belege.add(pydatev.Beleg(path))` (or use a top-level
-  `Belegarchiv` without a Buchungsstapel). Useful when staging files
-  before the matching booking exists, or when re-saving an archive
-  whose bookings are managed elsewhere.
-- **Beleglink quoting on read**: pyDATEV's CSV `Text` parser strips
-  embedded quotes, so a `Beleglink` written as `BEDI "<UUID>"` comes
-  back as `BEDI <UUID>` on load. `entry['Beleg']` accepts both forms
-  via regex extraction.
+  `bs.belege.add(pydatev_be.Beleg(path))` (or use a top-level
+  `pydatev_be.Belegarchiv` without a Buchungsstapel). Useful when
+  staging files before the matching booking exists, or when
+  re-saving an archive whose bookings are managed elsewhere.
+- **Beleglink round-trip with embedded quotes**: pyDATEV's CSV `Text`
+  parser correctly un-doubles internal `"` on load (since v0.2.2),
+  so a `Beleglink` written as `BEDI "<UUID>"` round-trips intact.
+  `entry['Beleg']` extracts the GUID via regex from either the
+  quoted or unquoted form for robustness against legacy archives.
 - **Empty archive**: `Belegarchiv.save()` refuses to write an empty
   archive (DATEV consumers reject such files). `Buchungsstapel.save()`
   simply skips the ZIP step if `bs.belege.data` is empty.

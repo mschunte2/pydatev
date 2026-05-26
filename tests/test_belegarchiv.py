@@ -8,7 +8,9 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-import pydatev
+# Belege classes live in the opt-in submodule; alias as `pydatev`
+# so the rest of this file (which predates the split) keeps working.
+from pydatev import belegarchiv as pydatev
 
 
 # ---------- Helpers ----------
