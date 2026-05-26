@@ -27,10 +27,11 @@ with pkg_resources.resource_stream(__name__, "format-specifications.dat") as f:
     specifications = pickle.load(f)
 
 
-# DATEV-accepted file types for Belege
-# (see https://apps.datev.de/help-center/documents/1000312 — "Zulässige
-# Dateiformate für die Übertragung digitaler Belege" — for the
-# authoritative list).
+# DATEV-accepted file types for Belege. The authoritative list is
+# maintained by DATEV in Hilfe-Center document 1000312, "Zulässige
+# Dateiformate für die Übertragung digitaler Belege". That document
+# is only reachable for authenticated DATEV customers via the
+# Hilfe-Center search, so no public URL is cited here.
 SUPPORTED_BELEG_EXTENSIONS = frozenset({
     "pdf",
     "jpg", "jpeg", "png", "tif", "tiff", "bmp", "gif",

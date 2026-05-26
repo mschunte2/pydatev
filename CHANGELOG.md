@@ -22,10 +22,12 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Beleg file-types reference now points at the specific DATEV
+- **Beleg file-types reference now names the specific DATEV
   Hilfe-Center document** (Dok.-Nr. 1000312 — *"Zulässige Dateiformate
   für die Übertragung digitaler Belege"*) instead of the generic
-  help-center landing page. Updated in both
+  help-center landing page. The Hilfe-Center document itself is gated
+  to authenticated DATEV customers, so no public URL is cited;
+  customers can find it via the Hilfe-Center search. Updated in both
   `SUPPORTED_BELEG_EXTENSIONS`'s code comment and `File-handling.md`.
 
 ## [0.2.1] — 2026-05-22

@@ -265,8 +265,10 @@ not enforce the allowlist (round-trip stability).
 | Special | `pdf`, `msg`, `xml` |
 
 (Source: DATEV Hilfe-Center Dok.-Nr. 1000312 — *"Zulässige
-Dateiformate für die Übertragung digitaler Belege"* —
-<https://apps.datev.de/help-center/documents/1000312>.)
+Dateiformate für die Übertragung digitaler Belege"*. The document
+is gated to authenticated DATEV customers and reachable via the
+Hilfe-Center search at <https://apps.datev.de/help-center>; no
+public URL is available.)
 
 ---
 
