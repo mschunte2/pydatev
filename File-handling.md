@@ -264,7 +264,9 @@ not enforce the allowlist (round-trip stability).
 | Text | `txt`, `rtf`, `csv` |
 | Special | `pdf`, `msg`, `xml` |
 
-(Source: <https://apps.datev.de/help-center>.)
+(Source: DATEV Hilfe-Center Dok.-Nr. 1000312 — *"Zulässige
+Dateiformate für die Übertragung digitaler Belege"* —
+<https://apps.datev.de/help-center/documents/1000312>.)
 
 ---
 

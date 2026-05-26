@@ -28,7 +28,9 @@ with pkg_resources.resource_stream(__name__, "format-specifications.dat") as f:
 
 
 # DATEV-accepted file types for Belege
-# (see https://apps.datev.de/help-center for the authoritative list).
+# (see https://apps.datev.de/help-center/documents/1000312 — "Zulässige
+# Dateiformate für die Übertragung digitaler Belege" — for the
+# authoritative list).
 SUPPORTED_BELEG_EXTENSIONS = frozenset({
     "pdf",
     "jpg", "jpeg", "png", "tif", "tiff", "bmp", "gif",
@@ -210,7 +212,9 @@ class DatevEntry(UserDict):
         elif format_type == 'Konto':
             value = string
         elif format_type == 'Text':
-            value = string.replace('"','')
+            # Inverse of python2datev: strip the outer wrapping quotes
+            # and un-double any embedded quotes (CSV-style escape).
+            value = string[1:-1].replace('""', '"')
         elif format_type == 'Zahl':
             if decimal_places == 0:
                 value = int(string)

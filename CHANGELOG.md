@@ -6,6 +6,28 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Round-trip of Text values with embedded quotes.** `python2datev`
+  correctly CSV-escapes Text values by doubling internal `"` and
+  wrapping in outer `"..."` (commit 8ca2369), but `datev2python` was
+  stripping *all* quotes instead of performing the inverse unescape.
+  As a result, saving an entry with `Beleglink = 'BEDI "<UUID>"'` and
+  loading it back yielded `'BEDI <UUID>'`, breaking BEDI-based
+  Beleg-Verknüpfung on round-trip. The Text branch in
+  `DatevEntry.datev2python` now strips the outer wrapper and undoubles
+  internal quotes (`string[1:-1].replace('""', '"')`). New regression
+  test at `tests/test_text_roundtrip.py` covers the BEDI shape and
+  seven other embedded-quote variants.
+
+### Changed
+
+- **Beleg file-types reference now points at the specific DATEV
+  Hilfe-Center document** (Dok.-Nr. 1000312 — *"Zulässige Dateiformate
+  für die Übertragung digitaler Belege"*) instead of the generic
+  help-center landing page. Updated in both
+  `SUPPORTED_BELEG_EXTENSIONS`'s code comment and `File-handling.md`.
+
 ## [0.2.1] — 2026-05-22
 
 ### Fixed
