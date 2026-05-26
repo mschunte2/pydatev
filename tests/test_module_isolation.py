@@ -4,6 +4,8 @@ into the core namespace, or breaks the subclass relationship, these
 tests fail loudly."""
 
 import datetime
+import subprocess
+import sys
 
 import pydatev
 from pydatev import belegarchiv as pydatev_be
@@ -70,3 +72,27 @@ def test_belegarchiv_buchungsstapel_has_belege_attr():
         waehrungskennzeichen="EUR",
     )
     assert isinstance(bs.belege, pydatev_be.Belegarchiv)
+
+
+def test_dotted_import_does_not_leak_beleg_names_into_core():
+    """`import pydatev.belegarchiv` (the dotted form) imports the
+    submodule and, as a side effect, makes `pydatev` itself available
+    — but it must NOT pull any Beleg names up into the core
+    `pydatev.*` namespace. Run in a subprocess to get a clean
+    interpreter state regardless of what previous tests imported."""
+    names_list = ", ".join(repr(n) for n in _BELEGE_NAMES)
+    code = (
+        "import pydatev.belegarchiv\n"
+        "import pydatev\n"
+        f"names = [{names_list}]\n"
+        "leaked = [n for n in names if hasattr(pydatev, n)]\n"
+        "assert not leaked, "
+        "f'dotted import leaked into core: {leaked}'\n"
+        "assert pydatev.belegarchiv.Buchungsstapel is not None\n"
+        "print('OK')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        check=True, capture_output=True, text=True,
+    )
+    assert result.stdout.strip().endswith("OK"), result.stdout

@@ -6,6 +6,29 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-26
+
+### Changed
+
+- **Document `import pydatev.belegarchiv` as a third valid import
+  form** in `File-handling.md`, alongside the existing
+  `from pydatev import belegarchiv` and
+  `from pydatev.belegarchiv import …` forms. All three are
+  equivalent and reach the same classes; the note also makes
+  explicit that none of them leaks Beleg names into the core
+  `pydatev` namespace.
+
+- **New isolation regression test**
+  `test_dotted_import_does_not_leak_beleg_names_into_core` in
+  `tests/test_module_isolation.py` spawns a clean subprocess that
+  does `import pydatev.belegarchiv` and asserts that the core
+  `pydatev` module exposes none of the Beleg names afterwards.
+  Locks the boundary against accidental re-leakage in this code
+  path too (the existing tests covered `from pydatev import …`
+  forms).
+
+No source-code changes; pure docs + test enhancement.
+
 ## [0.4.0] — 2026-05-26
 
 ### Changed

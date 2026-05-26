@@ -57,6 +57,14 @@ from pydatev.belegarchiv import Buchungsstapel, Beleg, Belegarchiv
 from pydatev.belegarchiv import BELEGTYP_RECHNUNGSEINGANG
 ```
 
+A plain dotted import also works — both forms below are equivalent
+and both make `pydatev` itself importable as a side effect:
+
+```python
+import pydatev.belegarchiv               # then: pydatev.belegarchiv.Beleg(...)
+from pydatev import belegarchiv          # then: belegarchiv.Beleg(...)
+```
+
 For terse code in this document we'll alias the whole submodule:
 
 ```python
@@ -67,6 +75,10 @@ The `pydatev_be.Buchungsstapel` exposed by the submodule is a
 subclass of the core `pydatev.Buchungsstapel` — drop-in compatible,
 plus the Belege hooks (`self.belege`, the `entry["Beleg"]` field-like
 API, and `belege.zip` save/load orchestration).
+
+Either way, **no Beleg names leak into the core `pydatev` namespace**
+— `hasattr(pydatev, "Beleg")` is `False` after any of the imports
+above. Beleg-related symbols are reachable only via the submodule.
 
 ---
 
