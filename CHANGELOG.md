@@ -6,6 +6,36 @@ versioning per [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-05-26
+
+### Changed
+
+- **`Beleg` default GUID is now a UUIDv8 (RFC 9562) backed by
+  SHA-256** instead of a uuid5 (which is fixed to SHA-1 internally).
+  The full derivation is:
+
+  ```text
+  digest = sha256(namespace.bytes || archive_name.utf8 || 0x00 || blob)
+  guid   = uuid.UUID(bytes=digest[:16] with version=8, variant=RFC4122)
+  ```
+
+  Same (name, content) tuple → same GUID, same hybrid-identity
+  semantics as 0.3.0. The change is the *algorithm*: SHA-1 has had
+  practical collision attacks since 2017 (SHAttered) and chosen-prefix
+  collisions since 2020, so SHA-256 in the chain is the forward-looking
+  default. For this non-adversarial use case the 128-bit output is the
+  real collision bottleneck either way; the upgrade is design hygiene.
+
+  **Breaking change vs 0.3.0**: GUIDs of the form produced by 0.3.0's
+  brief uuid5-with-content-hash construction will not match 0.3.1.
+  Callers that pass an explicit `guid=` are unaffected. Existing
+  archives load unchanged (GUIDs are read from `document.xml`, not
+  recomputed).
+
+  New helper `_beleg_uuid8(name, blob)` in `pydatev.pydatev`. New
+  regression test `test_default_guid_is_uuidv8` confirms the version
+  and variant bits.
+
 ## [0.3.0] — 2026-05-26
 
 ### Changed

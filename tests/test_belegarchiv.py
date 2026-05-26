@@ -2,6 +2,7 @@
 
 import datetime
 import os
+import uuid
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -101,6 +102,17 @@ def test_default_guid_distinguishes_different_content_same_name(tmp_path):
         "Same archive_name but different content must produce "
         "different GUIDs (no silent filename collision)"
     )
+
+
+def test_default_guid_is_uuidv8(tmp_path):
+    """The auto-derived GUID is a UUIDv8 (RFC 9562, custom): version
+    nibble = 8, variant = RFC 4122. Confirms we're not silently
+    emitting a uuid5/SHA-1 value."""
+    pdf = _make_pdf(str(tmp_path), name="x.pdf", content=b"hello")
+    b = pydatev.Beleg(filepath=pdf)
+    u = uuid.UUID(b.guid)
+    assert u.version == 8, f"expected UUIDv8, got version {u.version}"
+    assert u.variant == uuid.RFC_4122
 
 
 def test_default_guid_distinguishes_same_content_different_name(tmp_path):

@@ -52,6 +52,34 @@ _BELEG_GUID_RE = re.compile(
 )
 
 
+def _beleg_uuid8(name: str, blob: bytes) -> str:
+    '''Derive a deterministic UUIDv8 (RFC 9562, "custom") for a Beleg
+    from its archive name and content bytes. The full SHA-256 of
+    (namespace || name_utf8 || 0x00 || blob) is truncated to 128
+    bits, then the version (8) and variant (RFC 4122) bits are set
+    per RFC 9562 §5.8.
+
+    Used instead of uuid5() because uuid5() is fixed to SHA-1
+    internally, and SHA-1 has had practical collision attacks since
+    2017 (SHAttered) / 2020 (chosen-prefix). For this use case
+    (non-adversarial document identification) the 128-bit output
+    bottleneck dominates either way, but SHA-256 in the chain is the
+    forward-looking choice.
+
+    Filenames cannot contain NUL on any real OS, so the 0x00
+    separator unambiguously delimits name from blob.
+    '''
+    h = hashlib.sha256()
+    h.update(_BELEG_GUID_NAMESPACE.bytes)
+    h.update(name.encode("utf-8"))
+    h.update(b"\0")
+    h.update(blob)
+    b = bytearray(h.digest()[:16])
+    b[6] = (b[6] & 0x0F) | 0x80  # version 8
+    b[8] = (b[8] & 0x3F) | 0x80  # RFC 4122/9562 variant
+    return str(uuid.UUID(bytes=bytes(b)))
+
+
 class DatevEntry(UserDict):
     '''A generic class for entries that are part of one of the data categories. The classes for entries of a specific data category should inherit from this class.
     An instance of this class behaves almost like a dictionary, but instead of arbitrary keys, only specific keys are allowed, and instead of arbitrary datatypes for the values, only specific datatypes are allowed.'''
@@ -383,14 +411,15 @@ class Beleg:
         ----------
         filepath:     str or os.PathLike, the file to read
         belegtyp:     BELEGTYP_RECHNUNGSEINGANG | BELEGTYP_RECHNUNGSAUSGANG | None
-        guid:         optional 36-char UUID; auto-derived from
-                      (archive_name, sha256(blob)) via uuid5 if
-                      omitted. Same file content under the same
-                      archive name always yields the same GUID,
-                      regardless of disk path. Same name with
-                      different content → different GUIDs (no silent
-                      filename collisions). Different name with same
-                      content → different GUIDs (preserves
+        guid:         optional 36-char UUID; if omitted, derived as
+                      a deterministic UUIDv8 (RFC 9562) from
+                      SHA-256(namespace || archive_name || 0x00 ||
+                      blob) — see _beleg_uuid8. Same file content
+                      under the same archive name always yields the
+                      same GUID, regardless of disk path. Same name
+                      with different content → different GUIDs (no
+                      silent filename collisions). Different name
+                      with same content → different GUIDs (preserves
                       business-identity-via-filename, e.g. two empty
                       placeholder Belege filed under distinct names).
         archive_name: optional name to store under in the archive;
@@ -417,15 +446,7 @@ class Beleg:
         with open(filepath, "rb") as f:
             blob = f.read()
         if guid is None:
-            # Derive from (archive_name, sha256(blob)) so re-exporting
-            # the same byte-stable file under the same name yields the
-            # same GUID (needed by downstream auto-attach flows, e.g.
-            # BuchhaltungsButler), while filename collisions over
-            # different content no longer silently dedup. The NUL
-            # separator removes any (name, hash) parse ambiguity.
-            digest = hashlib.sha256(blob).hexdigest()
-            guid = str(uuid.uuid5(_BELEG_GUID_NAMESPACE,
-                                  name + "\0" + digest))
+            guid = _beleg_uuid8(name, blob)
         if not _BELEG_GUID_RE.fullmatch(guid):
             raise DatevFormatError(
                 "guid {!r} must be a 36-char UUID".format(guid))
